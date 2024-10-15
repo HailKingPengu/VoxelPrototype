@@ -22,9 +22,9 @@ public struct ChunkGenerationJob : IJob
     int totalChunkSize;
     int totalChunkSize2;
 
-    public NativeArray<int> axisCols;
-    public NativeArray<int> faceCols;
-    public NativeArray<int> faceRows;
+    //public NativeArray<int> axisCols;
+    //public NativeArray<int> faceCols;
+    //public NativeArray<int> faceRows;
 
     int numVerts;
 
@@ -38,9 +38,8 @@ public struct ChunkGenerationJob : IJob
         totalChunkSize = chunkSize + 2;
         totalChunkSize2 = totalChunkSize * totalChunkSize;
 
-        //axisCols = new NativeArray<int>(totalChunkSize * totalChunkSize * 3, Allocator.TempJob);
-        //faceCols = new NativeArray<int>(totalChunkSize * totalChunkSize * 3 * 2, Allocator.TempJob);
-        //faceRows = new NativeArray<int>(totalChunkSize * totalChunkSize * 3 * 2, Allocator.TempJob);
+        NativeArray<int> axisCols = new NativeArray<int>(totalChunkSize * totalChunkSize * 3, Allocator.Temp);
+        NativeArray<int> faceCols = new NativeArray<int>(totalChunkSize * totalChunkSize * 3 * 2, Allocator.Temp);
 
         numVerts = 0;
 
@@ -81,13 +80,7 @@ public struct ChunkGenerationJob : IJob
             }
         }
 
-        voxelConstructorBinary();
-
-    }
-
-
-    void voxelConstructorBinary()
-    {
+        //VOXELCONSTRUCTOR
 
         //int with only first and last bit unset
         int boundaryInt = ~(1 << 0 | 1 << 31);
@@ -144,6 +137,10 @@ public struct ChunkGenerationJob : IJob
                 }
             }
         }
+
+        axisCols.Dispose();
+        faceCols.Dispose();
+
     }
 
     void faceConstructor(int x, int y, int z, int dir)
