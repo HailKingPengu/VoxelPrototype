@@ -402,7 +402,7 @@ Transform:
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalPosition: {x: 131, y: 178.7, z: -309.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -434,7 +434,7 @@ Transform:
   m_GameObject: {fileID: 1769170905}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 8.5722275, y: 12.3234415, z: 15.897099}
+  m_LocalPosition: {x: 293, y: 318.1, z: -284.6}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -452,15 +452,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a19846d00cf80f1459ad94384d0c9829, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  player: {fileID: 0}
+  player: {fileID: 963194228}
   tempMat: {fileID: 10302, guid: 0000000000000000f000000000000000, type: 0}
-  viewDistance: 20
+  viewDistance: 2
   chunkSize: 30
-  noiseFrequency: 0.01
-  noiseThreshold: 5
-  maxNoiseUpdates: 4
+  noiseFrequency: 0.5
+  noiseThreshold: 0.13
+  maxNoiseUpdates: 2
   maxChunkUpdates: 8
   maxMeshConstructions: 8
+  cShader: {fileID: 0}
+  scale: 0
+  octaves: 0
+  scaleStep: 0
+  strengthStep: 0
+  strength: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
