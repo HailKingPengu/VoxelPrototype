@@ -13,6 +13,7 @@ static float4 mod289(float4 x)
 
 static float4 permute(float4 x)
 {
+    //mhm, very random
     return mod289((34.0f * x + 1.0f) * x);
 }
 
@@ -23,23 +24,24 @@ static float4 taylorInvSqrt(float4 r)
 
 static float3 fade(float3 t)
 {
+    //Updated interpolation from Perlin's newer paper
     return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
 }
 
 
-float noise(float3 P)
+float noise(float3 pos)
 {
 
-    float3 Pi0 = floor(P); // Integer part for indexing
-    float3 Pi1 = Pi0 + float3(1.0f, 1.0f, 1.0f); // Integer part + 1
-    Pi0 = mod289(Pi0);
-    Pi1 = mod289(Pi1);
-    float3 Pf0 = frac(P); // Fractional part for interpolation
-    float3 Pf1 = Pf0 - float3(1.0f, 1.0f, 1.0f); // Fractional part - 1.0
-    float4 ix = float4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
-    float4 iy = float4(Pi0.yy, Pi1.yy);
-    float4 iz0 = Pi0.zzzz;
-    float4 iz1 = Pi1.zzzz;
+    float3 PInt0 = floor(pos); // Integer part for indexing
+    float3 PInt1 = PInt0 + float3(1.0f, 1.0f, 1.0f); // Integer part + 1
+    PInt0 = mod289(PInt0);
+    PInt1 = mod289(PInt1);
+    float3 PFrac0 = frac(P); // Fractional part for interpolation
+    float3 PFrac1 = PFrac0 - float3(1.0f, 1.0f, 1.0f); // Fractional part - 1.0
+    float4 ix = float4(PInt0.x, PInt1.x, PInt0.x, PInt1.x);
+    float4 iy = float4(PInt0.yy, PInt1.yy);
+    float4 iz0 = PInt0.zzzz;
+    float4 iz1 = PInt1.zzzz;
 
     float4 ixy = permute(permute(ix) + iy);
     float4 ixy0 = permute(ixy + iz0);
@@ -81,16 +83,16 @@ float noise(float3 P)
     g101 *= norm1.z;
     g111 *= norm1.w;
 
-    float n000 = dot(g000, Pf0);
-    float n100 = dot(g100, float3(Pf1.x, Pf0.yz));
-    float n010 = dot(g010, float3(Pf0.x, Pf1.y, Pf0.z));
-    float n110 = dot(g110, float3(Pf1.xy, Pf0.z));
-    float n001 = dot(g001, float3(Pf0.xy, Pf1.z));
-    float n101 = dot(g101, float3(Pf1.x, Pf0.y, Pf1.z));
-    float n011 = dot(g011, float3(Pf0.x, Pf1.yz));
-    float n111 = dot(g111, Pf1);
+    float n000 = dot(g000, PFrac0);
+    float n100 = dot(g100, float3(PFrac1.x, PFrac0.yz));
+    float n010 = dot(g010, float3(PFrac0.x, PFrac1.y, PFrac0.z));
+    float n110 = dot(g110, float3(PFrac1.xy, PFrac0.z));
+    float n001 = dot(g001, float3(PFrac0.xy, PFrac1.z));
+    float n101 = dot(g101, float3(PFrac1.x, PFrac0.y, PFrac1.z));
+    float n011 = dot(g011, float3(PFrac0.x, PFrac1.yz));
+    float n111 = dot(g111, PFrac1);
 
-    float3 fade_xyz = fade(Pf0);
+    float3 fade_xyz = fade(PFrac0);
     float4 n_z = lerp(float4(n000, n100, n010, n110), float4(n001, n101, n011, n111), fade_xyz.z);
     float2 n_yz = lerp(n_z.xy, n_z.zw, fade_xyz.y);
     float n_xyz = lerp(n_yz.x, n_yz.y, fade_xyz.x);
@@ -112,8 +114,6 @@ float strength;
 [numthreads(8, 8, 8)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
-    //float3 pos = float3(id.x, id.y, id.z);
-
     float value;
     
     float localScale = scale;
@@ -131,5 +131,4 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     value += strength;
     
     Result[id.xyz] = value;
-    //float4(value, value, value, 1);
 }

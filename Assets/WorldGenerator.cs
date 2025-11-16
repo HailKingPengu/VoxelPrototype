@@ -8,41 +8,71 @@ using Unity.Jobs;
 using UnityEngine.Jobs;
 using Unity.Collections;
 using System.Diagnostics;
-using NUnit.Framework.Constraints;
-using static UnityEditor.PlayerSettings;
+using System.Linq;
 
-public class ChunkJobData
+public class chunkGenData
 {
-    public JobHandle JobHandle;
-
+    public NativeArray<float> noiseMap;
     public NativeList<float3> verts;
     public NativeList<int> tris;
     public NativeList<float3> normals;
+    public NativeArray<bool> data;
+    public NativeArray<int> modData;
 
-    public ChunkJobData()
+    public void ForceDisposeAll()
     {
-        verts = new NativeList<float3>(Allocator.Persistent);
-        tris = new NativeList<int>(Allocator.Persistent);
-        normals = new NativeList<float3>(Allocator.Persistent);
-    }
+        noiseMap.Dispose();
 
-    public void AttachJob(JobHandle inJobHandle)
-    {
-        JobHandle = inJobHandle;
+        verts.Dispose();
+        tris.Dispose();
+        normals.Dispose();
+        modData.Dispose();
     }
 
     public void DisposeAll()
     {
-        verts.Dispose();
-        tris.Dispose();
-        normals.Dispose();
+        if(noiseMap.IsCreated) noiseMap.Dispose();
+
+        if (verts.IsCreated) verts.Dispose();
+        if (tris.IsCreated) tris.Dispose();
+        if (normals.IsCreated) normals.Dispose();
+        if (modData.IsCreated) modData.Dispose();
     }
 }
+
+//public class ChunkJobData
+//{
+//    public JobHandle JobHandle;
+
+//    public NativeList<float3> verts;
+//    public NativeList<int> tris;
+//    public NativeList<float3> normals;
+
+//    public ChunkJobData()
+//    {
+//        verts = new NativeList<float3>(Allocator.Persistent);
+//        tris = new NativeList<int>(Allocator.Persistent);
+//        normals = new NativeList<float3>(Allocator.Persistent);
+//    }
+
+//    public void AttachJob(JobHandle inJobHandle)
+//    {
+//        JobHandle = inJobHandle;
+//    }
+
+//    public void DisposeAll()
+//    {
+//        verts.Dispose();
+//        tris.Dispose();
+//        normals.Dispose();
+//    }
+//}
 
 public class WorldGenerator : MonoBehaviour
 {
 
     [SerializeField] Transform player;
+    int3 playerPosition;
 
     [SerializeField] Material tempMat;
 
@@ -53,6 +83,10 @@ public class WorldGenerator : MonoBehaviour
     [SerializeField] int chunkSize;
 
     GameObject[,,] chunkObjects;
+    Dictionary<int3, GameObject> chunkDictionary;
+    Dictionary<int3, NativeArray<bool>> chunkData;
+    Dictionary<int3, NativeArray<int>> chunkModData;
+    NativeArray<int> modDataHolder;
 
     int3 mapOffset;
 
@@ -71,11 +105,13 @@ public class WorldGenerator : MonoBehaviour
     List<int3> noiseJobHandlesPos;
     List<int3> chunkJobHandlesPos;
 
-    NativeArray<float>[,,] noiseMaps;
+    Dictionary<int3, chunkGenData> chunkGenDictionary;
 
-    NativeList<float3>[,,] verts;
-    NativeList<int>[,,] tris;
-    NativeList<float3>[,,] normals;
+    //NativeArray<float>[,,] noiseMaps;
+
+    //NativeList<float3>[,,] verts;
+    //NativeList<int>[,,] tris;
+    //NativeList<float3>[,,] normals;
 
 
     [Header("generation speed settings")]
@@ -98,6 +134,8 @@ public class WorldGenerator : MonoBehaviour
     [SerializeField] float strengthStep;
     [SerializeField] float strength;
 
+    int removalUpdateFreq = 5;
+    int removalUpdateNum;
 
     // Start is called before the first frame update
     void Start()
@@ -115,15 +153,22 @@ public class WorldGenerator : MonoBehaviour
         chunkJobHandlesList = new List<JobHandle>();
         chunkJobHandlesPos = new List<int3>();
 
-        noiseMaps = new NativeArray<float>[viewDistance, viewDistance, viewDistance];
+        //noiseMaps = new NativeArray<float>[viewDistance, viewDistance, viewDistance];
 
-        verts = new NativeList<float3>[viewDistance, viewDistance, viewDistance];
-        tris = new NativeList<int>[viewDistance, viewDistance, viewDistance];
-        normals = new NativeList<float3>[viewDistance, viewDistance, viewDistance];
+        //verts = new NativeList<float3>[viewDistance, viewDistance, viewDistance];
+        //tris = new NativeList<int>[viewDistance, viewDistance, viewDistance];
+        //normals = new NativeList<float3>[viewDistance, viewDistance, viewDistance];
 
         chunksToUpdate = new List<int3>();
 
         Stopwatch sw = Stopwatch.StartNew();
+
+        chunkDictionary = new Dictionary<int3, GameObject>();
+        chunkGenDictionary = new Dictionary<int3, chunkGenData>();
+        chunkData = new Dictionary<int3, NativeArray<bool>>();
+        chunkModData = new Dictionary<int3, NativeArray<int>>();
+
+        modDataHolder = new NativeArray<int>(32 * 32 * 32, Allocator.Persistent);
 
         for (int x = 0; x < viewDistance; x++)
         {
@@ -131,16 +176,24 @@ public class WorldGenerator : MonoBehaviour
             {
                 for (int z = 0; z < viewDistance; z++)
                 {
-                    chunkObjects[x, y, z] = new GameObject("chunk: " + x + ", " + y + ", " + z);
-                    chunkObjects[x, y, z].transform.position = new Vector3(x * (chunkSize - 1), y * (chunkSize - 1), z * (chunkSize - 1));
-                    chunkObjects[x, y, z].AddComponent<MeshFilter>();
-                    chunkObjects[x, y, z].AddComponent<MeshRenderer>();
-                    chunkObjects[x, y, z].GetComponent<MeshRenderer>().material = tempMat;
+                    //chunkObjects[x, y, z] = new GameObject("chunk: " + x + ", " + y + ", " + z);
+                    //chunkObjects[x, y, z].transform.position = new Vector3(x * (chunkSize - 1), y * (chunkSize - 1), z * (chunkSize - 1));
+                    //chunkObjects[x, y, z].AddComponent<MeshFilter>();
+                    //chunkObjects[x, y, z].AddComponent<MeshRenderer>();
+                    //chunkObjects[x, y, z].GetComponent<MeshRenderer>().material = tempMat;
 
-                    chunksToUpdate.Add(new int3(x, y, z));
+                    //chunksToUpdate.Add(new int3(x, y, z));
                 }
             }
         }
+
+        //int h = 3;
+        //int y1 = 2;
+
+        //uint uEmpty = 0;
+        //uint hMask = ((~uEmpty << 32 - h) >> y1);
+
+        //UnityEngine.Debug.Log(GetIntBinaryString(hMask));
 
         {
             //sw.Stop();
@@ -199,17 +252,39 @@ public class WorldGenerator : MonoBehaviour
         int chunkUpdates = 0;
         int meshConstructions = 0;
 
+
+        playerPosition = new int3((int)player.position.x / 30, (int)player.position.y / 30, (int)player.position.z / 30);
+
+        chunksToUpdate = chunksToUpdate.OrderByDescending(
+            chunk => math.abs(chunk.x - playerPosition.x) + math.abs(chunk.y - playerPosition.y) + math.abs(chunk.z - playerPosition.z)
+            ).ToList();
+
+        RearrangeChunks();
+
+        if (removalUpdateNum >= removalUpdateFreq)
+        {
+            RemoveChunks();
+        }
+        removalUpdateNum++;
+
         for (int i = chunksToUpdate.Count - 1; i >= 0 && noiseUpdates < maxNoiseUpdates; i--)
         {
+
             int3 pos = chunksToUpdate[i];
-            noiseMaps[pos.x, pos.y, pos.z] = new NativeArray<float>(32 * 32 * 32, Allocator.Persistent);
+            //noiseMaps[pos.x, pos.y, pos.z] = new NativeArray<float>(32 * 32 * 32, Allocator.Persistent);
+            chunkGenDictionary[pos].noiseMap = new NativeArray<float>(32 * 32 * 32, Allocator.Persistent);
+            //noiseDictionary.Add(pos, new NativeArray<float>(32 * 32 * 32, Allocator.Persistent));
+
+
 
             var job = new NoiseJob()
             {
-                offset = chunkObjects[pos.x, pos.y, pos.z].transform.position,
+                offset = pos * 29,
+                //offset = chunkObjects[pos.x, pos.y, pos.z].transform.position,
                 totalChunkSize = 32,
                 noiseThreshold = noiseThreshold,
-                noiseValue = noiseMaps[pos.x, pos.y, pos.z]
+                noiseValue = chunkGenDictionary[pos].noiseMap
+                //noiseMaps[pos.x, pos.y, pos.z]
             };
 
             noiseJobHandlesList.Add(job.Schedule(32 * 32 * 32, 128));
@@ -222,9 +297,10 @@ public class WorldGenerator : MonoBehaviour
             //ah, there you are
             chunksToUpdate.RemoveAt(i);
 
+            //UnityEngine.Debug.Log(math.abs(pos.x - playerPosition.x) + math.abs(pos.y - playerPosition.y) + math.abs(pos.z - playerPosition.z));
+
             noiseUpdates++;
         }
-
 
         for (int i = noiseJobHandlesList.Count - 1; i >= 0 && chunkUpdates < maxChunkUpdates; i--)
         {
@@ -240,9 +316,13 @@ public class WorldGenerator : MonoBehaviour
 
 
 
-                verts[pos.x, pos.y, pos.z] = new NativeList<float3>(Allocator.Persistent);
-                tris[pos.x, pos.y, pos.z] = new NativeList<int>(Allocator.Persistent);
-                normals[pos.x, pos.y, pos.z] = new NativeList<float3>(Allocator.Persistent);
+                chunkGenDictionary[pos].verts = new NativeList<float3>(Allocator.Persistent);
+                chunkGenDictionary[pos].tris = new NativeList<int>(Allocator.Persistent);
+                chunkGenDictionary[pos].normals = new NativeList<float3>(Allocator.Persistent);
+                chunkGenDictionary[pos].data = new NativeArray<bool>(32 * 32 * 32, Allocator.Persistent);
+                chunkGenDictionary[pos].modData = new NativeArray<int>(32 * 32 * 32, Allocator.Persistent);
+
+                if (chunkModData.ContainsKey(pos)) chunkGenDictionary[pos].modData.CopyFrom(chunkModData[pos]);
 
                 //ChunkJobData currentJob = new ChunkJobData();
                 //chunkJobs.Add(currentJob);
@@ -250,12 +330,16 @@ public class WorldGenerator : MonoBehaviour
                 //NativeArray<float> inputArray = new NativeArray<float>(32 * 32 * 32, Allocator.TempJob);
                 //noiseMaps[pos.x, pos.y, pos.z].CopyTo(inputArray);
 
+
+
                 var job = new ChunkGenerationJob()
                 {
-                    inputMap = noiseMaps[pos.x, pos.y, pos.z],
-                    verts = verts[pos.x, pos.y, pos.z],
-                    tris = tris[pos.x, pos.y, pos.z],
-                    normals = normals[pos.x, pos.y, pos.z],
+                    modMap = chunkGenDictionary[pos].modData,
+                    inputMap = chunkGenDictionary[pos].noiseMap,
+                    verts = chunkGenDictionary[pos].verts,
+                    tris = chunkGenDictionary[pos].tris,
+                    normals = chunkGenDictionary[pos].normals,
+                    outputMap = chunkGenDictionary[pos].data,
 
                     //verts = currentJob.verts,
                     //tris = currentJob.tris,
@@ -272,7 +356,7 @@ public class WorldGenerator : MonoBehaviour
 
                 chunkUpdates++;
             }
-        }
+        }        
 
         for (int i = chunkJobHandlesList.Count - 1; i >= 0 && meshConstructions < maxMeshConstructions; i--)
         {
@@ -290,9 +374,9 @@ public class WorldGenerator : MonoBehaviour
                 chunkJobHandlesPos.RemoveAt(i);
 
                 Mesh mesh = new Mesh();
-                mesh.SetVertices(verts[pos.x, pos.y, pos.z].AsArray().Reinterpret<Vector3>());
-                mesh.SetTriangles(tris[pos.x, pos.y, pos.z].AsArray().ToArray(), 0);
-                mesh.SetNormals(normals[pos.x, pos.y, pos.z].AsArray());
+                mesh.SetVertices(chunkGenDictionary[pos].verts.AsArray().Reinterpret<Vector3>());
+                mesh.SetTriangles(chunkGenDictionary[pos].tris.AsArray().ToArray(), 0);
+                mesh.SetNormals(chunkGenDictionary[pos].normals.AsArray());
 
                 //mesh.SetVertices(chunkJobs[i].verts.AsArray().Reinterpret<Vector3>());
                 //mesh.SetTriangles(chunkJobs[i].tris.AsArray().ToArray(), 0);
@@ -300,41 +384,97 @@ public class WorldGenerator : MonoBehaviour
 
                 mesh.UploadMeshData(false);
 
-                noiseMaps[pos.x, pos.y, pos.z].Dispose();
+                CreateChunkObject(pos, chunkGenDictionary[pos].data);
 
-                verts[pos.x, pos.y, pos.z].Dispose();
-                tris[pos.x, pos.y, pos.z].Dispose();
-                normals[pos.x, pos.y, pos.z].Dispose();
+                chunkGenDictionary[pos].DisposeAll();
 
-                //chunkJobs[i].DisposeAll();
+                chunkDictionary[pos].GetComponent<MeshFilter>().mesh = mesh;
 
-                chunkObjects[pos.x, pos.y, pos.z].GetComponent<MeshFilter>().mesh = mesh;
+                //chunkObjects[pos.x, pos.y, pos.z].GetComponent<MeshFilter>().mesh = mesh;
 
                 meshConstructions++;
             }
         }
     }
 
-    void RearrangeChunks(int3 newOffset)
+    void CreateChunkObject(int3 pos, NativeArray<bool> data)
     {
-        int3 movement = mapOffset - newOffset;
-
-        for (int x = 0; x < viewDistance; x++)
+        if (!chunkDictionary.ContainsKey(pos))
         {
-            for (int y = 0; y < viewDistance; y++)
-            {
-                for (int z = 0; z < viewDistance; z++)
-                {
-                    chunkObjects[x, y, z] = new GameObject("chunk: " + x + ", " + y + ", " + z);
-                    chunkObjects[x, y, z].transform.position = new Vector3(x * (chunkSize - 1), y * (chunkSize - 1), z * (chunkSize - 1));
-                    chunkObjects[x, y, z].AddComponent<MeshFilter>();
-                    chunkObjects[x, y, z].AddComponent<MeshRenderer>();
-                    chunkObjects[x, y, z].GetComponent<MeshRenderer>().material = tempMat;
+            GameObject newChunk = new GameObject("chunk: " + pos.x + ", " + pos.y + ", " + pos.z);
+            newChunk.transform.position = new Vector3(pos.x * (chunkSize - 1), pos.y * (chunkSize - 1), pos.z * (chunkSize - 1));
+            newChunk.AddComponent<MeshFilter>();
+            newChunk.AddComponent<MeshRenderer>();
+            newChunk.GetComponent<MeshRenderer>().material = tempMat;
 
-                    chunksToUpdate.Add(new int3(x, y, z));
+            chunkDictionary.Add(pos, newChunk);
+            chunkData[pos] = data;
+        }
+    }
+
+    void RearrangeChunks()
+    {
+        for (int x = -viewDistance + playerPosition.x; x < viewDistance + playerPosition.x; x++)
+        {
+            for (int y = -viewDistance + playerPosition.y; y < viewDistance + playerPosition.y; y++)
+            {
+                for (int z = -viewDistance + playerPosition.z; z < viewDistance + playerPosition.z; z++)
+                {
+                    if(!chunkGenDictionary.ContainsKey(new int3(x, y, z)))
+                    {
+                        chunksToUpdate.Add(new int3(x, y, z));
+
+                        chunkGenDictionary.Add(new int3(x, y, z), new chunkGenData());
+                    }
                 }
             }
         }
+    }
+
+    void RemoveChunks()
+    {
+
+        List<int3> flaggedForRemoval = new List<int3>();
+
+        foreach(KeyValuePair<int3, GameObject> entry in chunkDictionary)
+        {
+            int3 pos = entry.Key;
+
+            if(pos.x > playerPosition.x + viewDistance * 1.4 || pos.y > playerPosition.y + viewDistance * 1.4 || pos.z > playerPosition.z + viewDistance * 1.4 || pos.x < playerPosition.x - viewDistance * 1.4 || pos.y < playerPosition.y - viewDistance * 1.4 || pos.z < playerPosition.z - viewDistance * 1.4)
+            {
+                flaggedForRemoval.Add(pos);
+            }
+        }
+
+        for(int i = 0; i < flaggedForRemoval.Count; i++)
+        {
+            if (chunkDictionary.ContainsKey(flaggedForRemoval[i]))
+            {
+                //UnityEngine.Debug.Log("Something deleted");
+                Destroy(chunkDictionary[flaggedForRemoval[i]].gameObject);
+                chunkDictionary.Remove(flaggedForRemoval[i]);
+
+                chunkGenDictionary[flaggedForRemoval[i]].DisposeAll();
+                chunkGenDictionary.Remove(flaggedForRemoval[i]);
+            }
+        }
+
+        //for (int x = 0; x < viewDistance; x++)
+        //{
+        //    for (int y = 0; y < viewDistance; y++)
+        //    {
+        //        for (int z = 0; z < viewDistance; z++)
+        //        {
+        //            chunkObjects[x, y, z] = new GameObject("chunk: " + x + ", " + y + ", " + z);
+        //            chunkObjects[x, y, z].transform.position = new Vector3(x * (chunkSize - 1), y * (chunkSize - 1), z * (chunkSize - 1));
+        //            chunkObjects[x, y, z].AddComponent<MeshFilter>();
+        //            chunkObjects[x, y, z].AddComponent<MeshRenderer>();
+        //            chunkObjects[x, y, z].GetComponent<MeshRenderer>().material = tempMat;
+
+        //            chunksToUpdate.Add(new int3(x, y, z));
+        //        }
+        //    }
+        //}
     }
 
     //void ComputeNoiseSection(int3 startingPos, int maxSize)
@@ -368,5 +508,118 @@ public class WorldGenerator : MonoBehaviour
     int indexFromInt3(int x, int y, int z)
     {
         return(x + y * viewDistance + z * viewDistance * viewDistance);
+    }
+
+    //getting central 30x30x30 of 32x32x32 array
+    int indexFromInt3(int3 pos)
+    {
+        return ((pos.x + 1) + (pos.y + 1) * 32 + (pos.z + 1) * 1024);
+    }
+
+    static string GetIntBinaryString(int n)
+    {
+        char[] b = new char[32];
+        int pos = 31;
+        int i = 0;
+
+        while (i < 32)
+        {
+            if ((n & (1 << i)) != 0)
+            {
+                b[pos] = '1';
+            }
+            else
+            {
+                b[pos] = '0';
+            }
+            pos--;
+            i++;
+        }
+        return new string(b);
+    }
+
+    static string GetIntBinaryString(uint n)
+    {
+        char[] b = new char[32];
+        int pos = 31;
+        int i = 0;
+
+        while (i < 32)
+        {
+            if ((n & (1 << i)) != 0)
+            {
+                b[pos] = '1';
+            }
+            else
+            {
+                b[pos] = '0';
+            }
+            pos--;
+            i++;
+        }
+        return new string(b);
+    }
+
+    public bool checkVoxel(int3 position)
+    {
+
+        int3 chunkPos = new int3(Mathf.FloorToInt((float)position.x / 29), Mathf.FloorToInt((float)position.y / 29), Mathf.FloorToInt((float)position.z / 29));
+
+        if (chunkData.ContainsKey(chunkPos))
+        {
+            //UnityEngine.Debug.Log(position);
+            //UnityEngine.Debug.Log(position / 30);
+            //UnityEngine.Debug.Log(position % 30);
+            //UnityEngine.Debug.Log(new int3 ((int)Mod(position.x, 30), (int)Mod(position.y, 30), (int)Mod(position.z, 30)));
+
+            //turns out, % isn't modulo, but remainder. good to know.
+
+            if (chunkModData.ContainsKey(chunkPos))
+            {
+                if(chunkModData[chunkPos][indexFromInt3(new int3((int)Mod(position.x, 29), (int)Mod(position.y, 29), (int)Mod(position.z, 29)))] == 1)
+                {
+                    return true;
+                }
+            }
+
+            return chunkData[chunkPos][indexFromInt3(new int3((int)Mod(position.x, 29), (int)Mod(position.y, 29), (int)Mod(position.z, 29)))];
+        }
+
+        return false;
+    }
+
+    public static float Mod(float a, float b)
+    {
+        float c = a % b;
+        if ((c < 0 && b > 0) || (c > 0 && b < 0))
+        {
+            c += b;
+        }
+        return c;
+    }
+
+    public void modifyTerrain(int3 position)
+    {
+
+        int3 chunkPos = new int3(Mathf.FloorToInt((float)position.x / 29), Mathf.FloorToInt((float)position.y / 29), Mathf.FloorToInt((float)position.z / 29));
+
+        if (!chunkModData.ContainsKey(chunkPos))
+        {
+            NativeArray<int> newArray = new NativeArray<int>(32 * 32 * 32, Allocator.Persistent);
+            chunkModData.Add(chunkPos, newArray);
+        }
+
+        NativeArray<int> tempArray = new NativeArray<int>(32 * 32 * 32, Allocator.Persistent);
+        
+        chunkModData[chunkPos].CopyTo(tempArray);
+            
+        tempArray[indexFromInt3(new int3((int)Mod(position.x, 29), (int)Mod(position.y, 29), (int)Mod(position.z, 29)))] = 1;
+
+        chunkModData[chunkPos].CopyFrom(tempArray);
+
+        tempArray.Dispose();
+
+        chunksToUpdate.Add(chunkPos);
+
     }
 }

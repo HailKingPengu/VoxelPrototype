@@ -693,7 +693,7 @@ public struct NoiseJob : IJobParallelFor
         return new float3(index % (totalChunkSize), (index % (totalChunkSize * totalChunkSize)) / (totalChunkSize), index / (totalChunkSize * totalChunkSize));
     }
 
-    public float NoiseValue(float3 samplePos)
+    public float NoiseValueCaveWorld(float3 samplePos)
     {
         float noiseValue = 0;
 
@@ -718,6 +718,81 @@ public struct NoiseJob : IJobParallelFor
 
         //noiseValue = Mathf.Max(0, noiseValue - recede);
         float finalValue = noiseValue * strength;
+        //finalValue += ((offset + samplePos).y * (offset + samplePos).y * (offset + samplePos).y) - surfaceHeight;
+        return finalValue;
+    }
+
+    public float NoiseValue(float3 samplePos)
+    {
+
+        float BaseHeightNoiseValue = 0;
+        float surfaceHeight = 50f;
+
+        float frequency = 0.006f; float roughness = 1.8f;
+        float amplitude = 1; float persistence = 0.9f;
+        float strength = 20f;
+        int numLayers = 3;
+
+        for (int i = 0; i < numLayers; i++)
+        {
+            float v = noise.cnoise(samplePos.xz * frequency);
+            BaseHeightNoiseValue += (v + 1) * 0.5f * amplitude;
+            frequency *= roughness;
+            amplitude *= persistence;
+            //noiseValue = v;
+        }
+
+        BaseHeightNoiseValue *= strength;
+
+        float heightBiasNoiseValue = 0;
+
+        frequency = 0.006f; roughness = 1.8f;
+        amplitude = 1; persistence = 0.9f;
+        strength = 20f;
+        numLayers = 2;
+
+        for (int i = 0; i < numLayers; i++)
+        {
+            float v = noise.cnoise(samplePos.xz * frequency);
+            heightBiasNoiseValue += (v + 1) * 0.5f * amplitude;
+            frequency *= roughness;
+            amplitude *= persistence;
+            //noiseValue = v;
+        }
+
+        heightBiasNoiseValue *= strength;
+
+
+        float noiseValue = 0;
+
+        frequency = 0.02f; roughness = 1.8f;
+        amplitude = 1; persistence = 0.9f;
+        strength = 8f;
+        numLayers = 3;
+
+        for (int i = 0; i < numLayers; i++)
+        {
+            float v = noise.cnoise(samplePos * frequency);
+            noiseValue += (v + 1) * 0.5f * amplitude;
+            frequency *= roughness;
+            amplitude *= persistence;
+        }
+        noiseValue *= strength;
+
+        //noiseValue = Mathf.Max(0, noiseValue - recede);
+        //float finalValue = noiseValue * strength + (BaseHeightNoiseValue - samplePos.y) / heightBiasNoiseValue;
+
+        float finalValue = math.clamp((BaseHeightNoiseValue * (heightBiasNoiseValue / 12 - 0.2f) + surfaceHeight - samplePos.y) + noiseValue * (heightBiasNoiseValue / 8 - 0.4f) , 0, 8);
+
+        //snaking caves underground
+        float noiseA = 0; float noiseB = 0; frequency = 0.015f;
+        noiseA = noise.cnoise(samplePos * frequency);
+        noiseB = noise.cnoise((samplePos + new float3(10, 30, 400)) * frequency);
+
+        finalValue -= (math.clamp((math.abs(noiseA * 4) + math.abs(noiseB * 4)), 0, 1) > 0.15 ? 0 : 10);
+
+        finalValue += noiseValue/ 3 * math.clamp(-400 + samplePos.y, 0, 1);
+
         //finalValue += ((offset + samplePos).y * (offset + samplePos).y * (offset + samplePos).y) - surfaceHeight;
         return finalValue;
     }
