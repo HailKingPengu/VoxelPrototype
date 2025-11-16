@@ -4,4 +4,6 @@ Generates millions of voxels efficiently using the greedy meshing algorithm. Mul
 
 This was the first half of my Minor Skilled at Saxion Enschede.
 
+[Itch.io page](https://hatinc.itch.io/voxel-terrain-generation-prototype)
+
 ![alt text](https://github.com/HailKingPengu/VoxelPrototype/blob/main/Imagery/Banner.avif?raw=true)
