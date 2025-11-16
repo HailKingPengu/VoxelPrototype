@@ -4,4 +4,4 @@ Generates millions of voxels efficiently using the greedy meshing algorithm. Mul
 
 This was the first half of my Minor Skilled at Saxion Enschede.
 
-![alt text](https://github.com/HailKingPengu/VoxelPrototype/blob/Imagery/Banner.avif?raw=true)
+![alt text](https://github.com/HailKingPengu/VoxelPrototype/blob/main/Imagery/Banner.avif?raw=true)
