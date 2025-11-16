@@ -10,6 +10,7 @@ using Unity.Collections;
 using System.Diagnostics;
 using System.Linq;
 
+//the general container class for saving the chunk's data and manipulating it.
 public class chunkGenData
 {
     public NativeArray<float> noiseMap;
@@ -40,34 +41,6 @@ public class chunkGenData
     }
 }
 
-//public class ChunkJobData
-//{
-//    public JobHandle JobHandle;
-
-//    public NativeList<float3> verts;
-//    public NativeList<int> tris;
-//    public NativeList<float3> normals;
-
-//    public ChunkJobData()
-//    {
-//        verts = new NativeList<float3>(Allocator.Persistent);
-//        tris = new NativeList<int>(Allocator.Persistent);
-//        normals = new NativeList<float3>(Allocator.Persistent);
-//    }
-
-//    public void AttachJob(JobHandle inJobHandle)
-//    {
-//        JobHandle = inJobHandle;
-//    }
-
-//    public void DisposeAll()
-//    {
-//        verts.Dispose();
-//        tris.Dispose();
-//        normals.Dispose();
-//    }
-//}
-
 public class WorldGenerator : MonoBehaviour
 {
 
@@ -76,22 +49,18 @@ public class WorldGenerator : MonoBehaviour
 
     [SerializeField] Material tempMat;
 
-    [SerializeField] int viewDistance;
 
-    //ChunkGenerator[,,] chunks;
+    [SerializeField] int viewDistance = 12;
+    [SerializeField] int chunkSize = 30;
 
-    [SerializeField] int chunkSize;
-
+    //terrain data containers
     GameObject[,,] chunkObjects;
     Dictionary<int3, GameObject> chunkDictionary;
     Dictionary<int3, NativeArray<bool>> chunkData;
     Dictionary<int3, NativeArray<int>> chunkModData;
     NativeArray<int> modDataHolder;
 
-    int3 mapOffset;
-
     List<int3> chunksToUpdate;
-
 
     [SerializeField] float noiseFrequency;
     [SerializeField] float noiseThreshold;
@@ -99,20 +68,12 @@ public class WorldGenerator : MonoBehaviour
     JobHandle[,,] noiseJobHandles;
     JobHandle[,,] chunkJobHandles;
 
-    //List<ChunkJobData> chunkJobs;
     List<JobHandle> noiseJobHandlesList;
     List<JobHandle> chunkJobHandlesList;
     List<int3> noiseJobHandlesPos;
     List<int3> chunkJobHandlesPos;
 
     Dictionary<int3, chunkGenData> chunkGenDictionary;
-
-    //NativeArray<float>[,,] noiseMaps;
-
-    //NativeList<float3>[,,] verts;
-    //NativeList<int>[,,] tris;
-    //NativeList<float3>[,,] normals;
-
 
     [Header("generation speed settings")]
 
@@ -126,8 +87,6 @@ public class WorldGenerator : MonoBehaviour
     [SerializeField] ComputeShader cShader;
     RenderTexture texture;
 
-    int noiseSize;
-
     [SerializeField] float scale;
     [SerializeField] int octaves;
     [SerializeField] float scaleStep;
@@ -137,27 +96,18 @@ public class WorldGenerator : MonoBehaviour
     int removalUpdateFreq = 5;
     int removalUpdateNum;
 
-    // Start is called before the first frame update
+    //Initialize all data containers
     void Start()
     {
-        mapOffset = new int3((int)player.transform.position.x, (int)player.transform.position.y, (int)player.transform.position.z);
 
         chunkObjects = new GameObject[viewDistance, viewDistance, viewDistance];
         noiseJobHandles = new JobHandle[viewDistance, viewDistance, viewDistance];
         chunkJobHandles = new JobHandle[viewDistance, viewDistance, viewDistance];
 
-        //chunkJobs = new List<ChunkJobData>();
-
         noiseJobHandlesList = new List<JobHandle>();
         noiseJobHandlesPos = new List<int3>();
         chunkJobHandlesList = new List<JobHandle>();
         chunkJobHandlesPos = new List<int3>();
-
-        //noiseMaps = new NativeArray<float>[viewDistance, viewDistance, viewDistance];
-
-        //verts = new NativeList<float3>[viewDistance, viewDistance, viewDistance];
-        //tris = new NativeList<int>[viewDistance, viewDistance, viewDistance];
-        //normals = new NativeList<float3>[viewDistance, viewDistance, viewDistance];
 
         chunksToUpdate = new List<int3>();
 
@@ -169,145 +119,56 @@ public class WorldGenerator : MonoBehaviour
         chunkModData = new Dictionary<int3, NativeArray<int>>();
 
         modDataHolder = new NativeArray<int>(32 * 32 * 32, Allocator.Persistent);
-
-        for (int x = 0; x < viewDistance; x++)
-        {
-            for (int y = 0; y < viewDistance; y++)
-            {
-                for (int z = 0; z < viewDistance; z++)
-                {
-                    //chunkObjects[x, y, z] = new GameObject("chunk: " + x + ", " + y + ", " + z);
-                    //chunkObjects[x, y, z].transform.position = new Vector3(x * (chunkSize - 1), y * (chunkSize - 1), z * (chunkSize - 1));
-                    //chunkObjects[x, y, z].AddComponent<MeshFilter>();
-                    //chunkObjects[x, y, z].AddComponent<MeshRenderer>();
-                    //chunkObjects[x, y, z].GetComponent<MeshRenderer>().material = tempMat;
-
-                    //chunksToUpdate.Add(new int3(x, y, z));
-                }
-            }
-        }
-
-        //int h = 3;
-        //int y1 = 2;
-
-        //uint uEmpty = 0;
-        //uint hMask = ((~uEmpty << 32 - h) >> y1);
-
-        //UnityEngine.Debug.Log(GetIntBinaryString(hMask));
-
-        {
-            //sw.Stop();
-            //UnityEngine.Debug.Log("setup time: " + sw.Elapsed.ToString());
-            //sw.Restart();
-
-            //for (int x = 0; x < viewDistance; x++)
-            //{
-            //    for (int y = 0; y < viewDistance; y++)
-            //    {
-            //        for (int z = 0; z < viewDistance; z++)
-            //        {
-            //            noiseJobHandles[x,y,z].Complete();
-
-            //            //for(int i = 0; i < 32; i++)
-            //            //{
-            //            //    UnityEngine.Debug.Log(noiseMaps[x, y, z][i]);
-            //            //}
-
-
-            //        }
-            //    }
-            //}
-
-            //sw.Stop();
-            //UnityEngine.Debug.Log("noise reading and chunk setup time: " + sw.Elapsed.ToString());
-            //sw.Restart();
-
-            //for (int x = 0; x < viewDistance; x++)
-            //{
-            //    for (int y = 0; y < viewDistance; y++)
-            //    {
-            //        for (int z = 0; z < viewDistance; z++)
-            //        {
-            //            chunkJobHandles[x, y, z].Complete();
-
-            //            Mesh mesh = new Mesh();
-            //            mesh.SetVertices(verts[x, y, z].AsArray().Reinterpret<Vector3>());
-            //            mesh.SetTriangles(tris[x, y, z].AsArray().ToArray(), 0);
-            //            mesh.SetNormals(normals[x, y, z].AsArray());
-            //            mesh.UploadMeshData(false);
-
-            //            chunks[x, y, z].GetComponent<MeshFilter>().mesh = mesh;
-            //        }
-            //    }
-            //}
-
-            //sw.Stop();
-            //UnityEngine.Debug.Log("mesh gen time: " + sw.Elapsed.ToString());
-        }
     }
 
+    //the main meat of the terrain generator uses a queue to first generate noise, then using binary greeding meshing generates a mesh.
     void Update()
     {
         int noiseUpdates = 0;
         int chunkUpdates = 0;
         int meshConstructions = 0;
 
-
         playerPosition = new int3((int)player.position.x / 30, (int)player.position.y / 30, (int)player.position.z / 30);
 
+        //ordering the list of chunks to create a priority queue
         chunksToUpdate = chunksToUpdate.OrderByDescending(
             chunk => math.abs(chunk.x - playerPosition.x) + math.abs(chunk.y - playerPosition.y) + math.abs(chunk.z - playerPosition.z)
             ).ToList();
 
         RearrangeChunks();
 
-        if (removalUpdateNum >= removalUpdateFreq)
-        {
-            RemoveChunks();
-        }
+        if (removalUpdateNum >= removalUpdateFreq) RemoveChunks();
         removalUpdateNum++;
 
+        //noise generation, which happens through unity jobs
         for (int i = chunksToUpdate.Count - 1; i >= 0 && noiseUpdates < maxNoiseUpdates; i--)
         {
 
             int3 pos = chunksToUpdate[i];
-            //noiseMaps[pos.x, pos.y, pos.z] = new NativeArray<float>(32 * 32 * 32, Allocator.Persistent);
             chunkGenDictionary[pos].noiseMap = new NativeArray<float>(32 * 32 * 32, Allocator.Persistent);
-            //noiseDictionary.Add(pos, new NativeArray<float>(32 * 32 * 32, Allocator.Persistent));
-
 
 
             var job = new NoiseJob()
             {
                 offset = pos * 29,
-                //offset = chunkObjects[pos.x, pos.y, pos.z].transform.position,
                 totalChunkSize = 32,
                 noiseThreshold = noiseThreshold,
                 noiseValue = chunkGenDictionary[pos].noiseMap
-                //noiseMaps[pos.x, pos.y, pos.z]
             };
 
             noiseJobHandlesList.Add(job.Schedule(32 * 32 * 32, 128));
             noiseJobHandlesPos.Add(new int3(pos.x, pos.y, pos.z));
 
-            //ComputeNoiseSection(chunksToUpdate[i], 4);
-
-
-
-            //ah, there you are
             chunksToUpdate.RemoveAt(i);
-
-            //UnityEngine.Debug.Log(math.abs(pos.x - playerPosition.x) + math.abs(pos.y - playerPosition.y) + math.abs(pos.z - playerPosition.z));
 
             noiseUpdates++;
         }
 
+        //noise data then gets turned into mesh data using the binary greedy meshing algorithm, in Unity jobs
         for (int i = noiseJobHandlesList.Count - 1; i >= 0 && chunkUpdates < maxChunkUpdates; i--)
         {
             if (noiseJobHandlesList[i].IsCompleted)
             {
-
-                //UnityEngine.Debug.Log(noiseJobHandlesList[i].IsCompleted);
 
                 noiseJobHandlesList[i].Complete();
                 noiseJobHandlesList.RemoveAt(i);
@@ -324,13 +185,6 @@ public class WorldGenerator : MonoBehaviour
 
                 if (chunkModData.ContainsKey(pos)) chunkGenDictionary[pos].modData.CopyFrom(chunkModData[pos]);
 
-                //ChunkJobData currentJob = new ChunkJobData();
-                //chunkJobs.Add(currentJob);
-
-                //NativeArray<float> inputArray = new NativeArray<float>(32 * 32 * 32, Allocator.TempJob);
-                //noiseMaps[pos.x, pos.y, pos.z].CopyTo(inputArray);
-
-
 
                 var job = new ChunkGenerationJob()
                 {
@@ -341,10 +195,6 @@ public class WorldGenerator : MonoBehaviour
                     normals = chunkGenDictionary[pos].normals,
                     outputMap = chunkGenDictionary[pos].data,
 
-                    //verts = currentJob.verts,
-                    //tris = currentJob.tris,
-                    //normals = currentJob.normals,
-
                     chunkSize = 30,
 
                 };
@@ -352,24 +202,19 @@ public class WorldGenerator : MonoBehaviour
                 chunkJobHandlesList.Add(job.Schedule());
                 chunkJobHandlesPos.Add(pos);
 
-                //currentJob.AttachJob(job.Schedule());
-
                 chunkUpdates++;
             }
         }        
 
+        //lastly this data is turned into Unity's Mesh class
         for (int i = chunkJobHandlesList.Count - 1; i >= 0 && meshConstructions < maxMeshConstructions; i--)
         {
             if (chunkJobHandlesList[i].IsCompleted)
             {
-                //chunkJobs[i].JobHandle.Complete();
 
                 chunkJobHandlesList[i].Complete();
                 chunkJobHandlesList.RemoveAt(i);
                 int3 pos = chunkJobHandlesPos[i];
-
-                //disposing of the noise map as it's done it's thing
-                //noiseMaps[pos.x, pos.y, pos.z].Dispose();
 
                 chunkJobHandlesPos.RemoveAt(i);
 
@@ -377,26 +222,19 @@ public class WorldGenerator : MonoBehaviour
                 mesh.SetVertices(chunkGenDictionary[pos].verts.AsArray().Reinterpret<Vector3>());
                 mesh.SetTriangles(chunkGenDictionary[pos].tris.AsArray().ToArray(), 0);
                 mesh.SetNormals(chunkGenDictionary[pos].normals.AsArray());
-
-                //mesh.SetVertices(chunkJobs[i].verts.AsArray().Reinterpret<Vector3>());
-                //mesh.SetTriangles(chunkJobs[i].tris.AsArray().ToArray(), 0);
-                //mesh.SetNormals(chunkJobs[i].normals.AsArray());
-
                 mesh.UploadMeshData(false);
 
                 CreateChunkObject(pos, chunkGenDictionary[pos].data);
 
                 chunkGenDictionary[pos].DisposeAll();
-
                 chunkDictionary[pos].GetComponent<MeshFilter>().mesh = mesh;
-
-                //chunkObjects[pos.x, pos.y, pos.z].GetComponent<MeshFilter>().mesh = mesh;
 
                 meshConstructions++;
             }
         }
     }
 
+    //initialize an empty chunk in the editor
     void CreateChunkObject(int3 pos, NativeArray<bool> data)
     {
         if (!chunkDictionary.ContainsKey(pos))
@@ -412,6 +250,7 @@ public class WorldGenerator : MonoBehaviour
         }
     }
 
+    //if the player moves over a chunk border, add potential chunks that came into range to the queue
     void RearrangeChunks()
     {
         for (int x = -viewDistance + playerPosition.x; x < viewDistance + playerPosition.x; x++)
@@ -430,7 +269,8 @@ public class WorldGenerator : MonoBehaviour
             }
         }
     }
-
+    
+    //if the player moves over a chunk border, remove the chunks that left the viewing range of the player.
     void RemoveChunks()
     {
 
@@ -450,7 +290,6 @@ public class WorldGenerator : MonoBehaviour
         {
             if (chunkDictionary.ContainsKey(flaggedForRemoval[i]))
             {
-                //UnityEngine.Debug.Log("Something deleted");
                 Destroy(chunkDictionary[flaggedForRemoval[i]].gameObject);
                 chunkDictionary.Remove(flaggedForRemoval[i]);
 
@@ -458,56 +297,6 @@ public class WorldGenerator : MonoBehaviour
                 chunkGenDictionary.Remove(flaggedForRemoval[i]);
             }
         }
-
-        //for (int x = 0; x < viewDistance; x++)
-        //{
-        //    for (int y = 0; y < viewDistance; y++)
-        //    {
-        //        for (int z = 0; z < viewDistance; z++)
-        //        {
-        //            chunkObjects[x, y, z] = new GameObject("chunk: " + x + ", " + y + ", " + z);
-        //            chunkObjects[x, y, z].transform.position = new Vector3(x * (chunkSize - 1), y * (chunkSize - 1), z * (chunkSize - 1));
-        //            chunkObjects[x, y, z].AddComponent<MeshFilter>();
-        //            chunkObjects[x, y, z].AddComponent<MeshRenderer>();
-        //            chunkObjects[x, y, z].GetComponent<MeshRenderer>().material = tempMat;
-
-        //            chunksToUpdate.Add(new int3(x, y, z));
-        //        }
-        //    }
-        //}
-    }
-
-    //void ComputeNoiseSection(int3 startingPos, int maxSize)
-    //{
-    //    for(int x = 0; x < maxSize; x++)
-    //    {
-    //        if(noiseSe)
-    //    }
-    //}
-
-    // Update is called once per frame
-    //void Update()
-    //{
-    //    if (chunksToUpdate.Count > 0)
-    //    {
-    //        //chunksToUpdate[0].Generate(chunkSize, noiseFrequency, noiseThreshold, chunksToUpdate[0].transform.position + Vector3.one);
-    //        chunksToUpdate.RemoveAt(0);
-    //    }
-    //    if (chunksToUpdate.Count > 0)
-    //    {
-    //        //chunksToUpdate[0].Generate(chunkSize, noiseFrequency, noiseThreshold, chunksToUpdate[0].transform.position + Vector3.one);
-    //        chunksToUpdate.RemoveAt(0);
-    //    }
-    //    if (chunksToUpdate.Count > 0)
-    //    {
-    //        //chunksToUpdate[0].Generate(chunkSize, noiseFrequency, noiseThreshold, chunksToUpdate[0].transform.position + Vector3.one);
-    //        chunksToUpdate.RemoveAt(0);
-    //    }
-    //}
-
-    int indexFromInt3(int x, int y, int z)
-    {
-        return(x + y * viewDistance + z * viewDistance * viewDistance);
     }
 
     //getting central 30x30x30 of 32x32x32 array
@@ -516,6 +305,7 @@ public class WorldGenerator : MonoBehaviour
         return ((pos.x + 1) + (pos.y + 1) * 32 + (pos.z + 1) * 1024);
     }
 
+    //debugging functions for logging binary data of an int
     static string GetIntBinaryString(int n)
     {
         char[] b = new char[32];
@@ -538,6 +328,7 @@ public class WorldGenerator : MonoBehaviour
         return new string(b);
     }
 
+    //same as above, but for an unsigned int
     static string GetIntBinaryString(uint n)
     {
         char[] b = new char[32];
@@ -572,7 +363,8 @@ public class WorldGenerator : MonoBehaviour
             //UnityEngine.Debug.Log(position % 30);
             //UnityEngine.Debug.Log(new int3 ((int)Mod(position.x, 30), (int)Mod(position.y, 30), (int)Mod(position.z, 30)));
 
-            //turns out, % isn't modulo, but remainder. good to know.
+            //turns out, % isn't modulo, but remainder.
+            //made a Mod function to use here.
 
             if (chunkModData.ContainsKey(chunkPos))
             {
@@ -598,6 +390,7 @@ public class WorldGenerator : MonoBehaviour
         return c;
     }
 
+    //if a chunk's data is modified, this function will regenerate the mesh.
     public void modifyTerrain(int3 position)
     {
 
